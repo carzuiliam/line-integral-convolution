@@ -1,0 +1,18 @@
+package org.carzuiliam.lic;
+
+import java.io.IOException;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        LICBuilder builder = new LICBuilder()
+                //.setInputImage("lena.jpg")
+                .setFlowFieldType(LICUtils.FlowFieldType.SINE)
+                .setSquareFlowFieldSize(400)
+                .setDiscreteFilterSize(2048)
+                .setLowPassFilterLength(10.0f)
+                .setLineSquareClipMax(100000.0f)
+                .setVectorComponentMinimum(0.05f);
+
+        builder.generate("lic.jpg");
+    }
+}
