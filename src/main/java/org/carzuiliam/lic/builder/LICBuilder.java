@@ -1,14 +1,16 @@
-package org.carzuiliam.lic;
+package org.carzuiliam.lic.builder;
+
+import org.carzuiliam.lic.utils.FlowField;
+import org.carzuiliam.lic.utils.Vector2D;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.Random;
-import java.io.FileNotFoundException;
 
 public class LICBuilder {
 
-    private LICUtils.FlowFieldType flowFieldType;
+    private FlowField.Type flowFieldType;
 
     private int squareFlowFieldSize;
     private int discreteFilterSize;
@@ -19,15 +21,18 @@ public class LICBuilder {
     private BufferedImage inputImage;
 
     public LICBuilder() {
-        this.flowFieldType = LICUtils.FlowFieldType.SADDLE;
-
+        this.flowFieldType = FlowField.Type.SADDLE;
         this.squareFlowFieldSize = 400;
         this.discreteFilterSize = 2048;
         this.lowPassFilterLength = 10.0f;
         this.lineSquareClipMax = 100000.0f;
         this.vectorComponentMinimum = 0.05f;
-
         this.inputImage = null;
+    }
+
+    public LICBuilder setFlowFieldType(FlowField.Type _type) {
+        this.flowFieldType = _type;
+        return this;
     }
 
     public LICBuilder setSquareFlowFieldSize(int _value) {
@@ -55,11 +60,6 @@ public class LICBuilder {
         return this;
     }
 
-    public LICBuilder setFlowFieldType(LICUtils.FlowFieldType _type) {
-        this.flowFieldType = _type;
-        return this;
-    }
-
     public LICBuilder setInputImage(String _resourceName) throws IOException {
         InputStream input = getClass().getClassLoader().getResourceAsStream(_resourceName);
 
@@ -74,7 +74,6 @@ public class LICBuilder {
     public void generate(String _filename) throws IOException {
         int width;
         int height;
-
         byte[] inputTexture;
 
         if (this.inputImage != null) {
@@ -89,14 +88,13 @@ public class LICBuilder {
             this.writeByteArrayToJPG(width, height, inputTexture, "noise.jpg");
         }
 
-        float[] vectors = new float[width * height * 2];
         float[] lut0 = new float[this.discreteFilterSize];
         float[] lut1 = new float[this.discreteFilterSize];
         byte[] outputImage = new byte[width * height];
 
-        LICUtils.generateFlowField(width, height, vectors, this.flowFieldType);
+        Vector2D[] vectors = FlowField.generateFlowField(width, height, this.flowFieldType);
 
-        this.normalizeVectors(width, height, vectors);
+        this.normalizeVectors(vectors);
         this.generateBoxFilterLUT(this.discreteFilterSize, lut0, lut1);
         this.flowImagingLIC(width, height, vectors, inputTexture, outputImage, lut0, lut1, this.lowPassFilterLength);
         this.writeByteArrayToJPG(width, height, outputImage, _filename);
@@ -111,51 +109,45 @@ public class LICBuilder {
             for (int x = 0; x < width; x++) {
                 int rgb = _image.getRGB(x, y);
                 int gray = (rgb >> 16) & 0xff;
+
                 data[y * width + x] = (byte) gray;
             }
         }
+
         return data;
-    }
-
-    private void normalizeVectors(int _width, int _height, float[] _vectors) {
-        for (int j = 0; j < _height; j++) {
-            for (int i = 0; i < _width; i++) {
-                int index = (j * _width + i) * 2;
-                float x = _vectors[index];
-                float y = _vectors[index + 1];
-
-                float magnitude = (float) Math.sqrt(x * x + y * y);
-                float scale = (magnitude == 0.0f) ? 0.0f : 1.0f / magnitude;
-
-                _vectors[index] *= scale;
-                _vectors[index + 1] *= scale;
-            }
-        }
     }
 
     private void makeWhiteNoise(int _width, int _height, byte[] _noise) {
         Random rand = new Random();
+
         for (int j = 0; j < _height; j++) {
             for (int i = 0; i < _width; i++) {
                 int randomValue = rand.nextInt();
+
                 randomValue = ((randomValue & 0xff) + ((randomValue & 0xff00) >> 8)) & 0xff;
                 _noise[j * _width + i] = (byte) randomValue;
             }
         }
     }
 
-    private void generateBoxFilterLUT(int size, float[] lut0, float[] lut1) {
-        for (int i = 0; i < size; i++) {
-            lut0[i] = i;
-            lut1[i] = i;
+    private void normalizeVectors(Vector2D[] _vectors) {
+        for (Vector2D vec : _vectors) {
+            vec.normalize();
+        }
+    }
+
+    private void generateBoxFilterLUT(int _size, float[] _lut0, float[] _lut1) {
+        for (int i = 0; i < _size; i++) {
+            _lut0[i] = i;
+            _lut1[i] = i;
         }
     }
 
     private void flowImagingLIC(
             int _width, int _height,
-            float[] _vectors, byte[] _noise, byte[] _image,
-            float[] _lut0, float[] _lut1,
-            float _kernelLength
+            Vector2D[] _vectors,
+            byte[] _noise, byte[] _image,
+            float[] _lut0, float[] _lut1, float _kernelLength
     ) {
         int advectsMax = (int) (_kernelLength * 3);
         float len2ID = (this.discreteFilterSize - 1) / _kernelLength;
@@ -175,9 +167,11 @@ public class LICBuilder {
                     float[] weightLUT = (dir == 0) ? _lut0 : _lut1;
 
                     while (currentLength < _kernelLength && advects < advectsMax) {
-                        int vecIdx = ((int) y * _width + (int) x) * 2;
-                        float vx = _vectors[vecIdx];
-                        float vy = _vectors[vecIdx + 1];
+                        int vecIdx = ((int) y * _width + (int) x);
+                        Vector2D vec = _vectors[vecIdx];
+
+                        float vx = vec.getX();
+                        float vy = vec.getY();
 
                         if (vx == 0 && vy == 0) {
                             if (advects == 0) {
@@ -192,14 +186,21 @@ public class LICBuilder {
 
                         float segmentLength = this.lineSquareClipMax;
 
-                        if (vx < -this.vectorComponentMinimum)
+                        if (vx < -this.vectorComponentMinimum) {
                             segmentLength = (int) x - x / vx;
-                        if (vx > this.vectorComponentMinimum)
+                        }
+
+                        if (vx > this.vectorComponentMinimum) {
                             segmentLength = Math.min(segmentLength, ((int) (x + 1.5f) - x) / vx);
-                        if (vy < -this.vectorComponentMinimum)
+                        }
+
+                        if (vy < -this.vectorComponentMinimum) {
                             segmentLength = Math.min(segmentLength, ((int) y - y) / vy);
-                        if (vy > this.vectorComponentMinimum)
+                        }
+
+                        if (vy > this.vectorComponentMinimum) {
                             segmentLength = Math.min(segmentLength, ((int) (y + 1.5f) - y) / vy);
+                        }
 
                         float previousLength = currentLength;
                         currentLength += segmentLength;
