@@ -8,7 +8,7 @@ import java.io.IOException;
 public class Main {
     public static void main(String[] args) throws IOException {
         LICBuilder builder = new LICBuilder()
-                //.setInputImage("lena.jpg")
+                .setInputImage("images/lena.jpg")
                 .setFlowFieldType(FlowField.Type.SADDLE)
                 .setSquareFlowFieldSize(400)
                 .setDiscreteFilterSize(2048)
