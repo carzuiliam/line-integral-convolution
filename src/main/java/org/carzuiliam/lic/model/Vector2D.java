@@ -1,4 +1,4 @@
-package org.carzuiliam.lic.utils;
+package org.carzuiliam.lic.model;
 
 public class Vector2D {
     private float x;

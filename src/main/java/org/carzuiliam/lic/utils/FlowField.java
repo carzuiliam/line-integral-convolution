@@ -1,5 +1,7 @@
 package org.carzuiliam.lic.utils;
 
+import org.carzuiliam.lic.model.Vector2D;
+
 public class FlowField {
 
     public enum Type {

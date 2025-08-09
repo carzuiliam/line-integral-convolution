@@ -2,7 +2,7 @@ package org.carzuiliam.lic.builder;
 
 import org.carzuiliam.lic.utils.FlowField;
 import org.carzuiliam.lic.utils.ImageUtils;
-import org.carzuiliam.lic.utils.Vector2D;
+import org.carzuiliam.lic.model.Vector2D;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
